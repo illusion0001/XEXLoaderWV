@@ -32,7 +32,7 @@ jobs:
         with:
           version: ${{ steps.ghidra_version.outputs.full }}
       - name: Build Extension
-        working-dist: XEXLoaderWV
+        working-directory: XEXLoaderWV
         run: gradle
       - name: Upload artifact
         uses: actions/upload-artifact@v3
