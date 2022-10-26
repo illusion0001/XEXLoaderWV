@@ -44,6 +44,7 @@ public class XEXHeader {
 	public ArrayList<String> stringTable;
 	public ArrayList<ImportLibrary> importLibs;
 	public ArrayList<MemoryBlock> blocks = new ArrayList<MemoryBlock>();
+	public XEXPatchDescriptor patchDescriptor;
 	
 	public XEXHeader(byte[] data, List<Option> list, boolean isDevKit) throws Exception
 	{
@@ -87,14 +88,15 @@ public class XEXHeader {
 		}
 		ProcessOptionalHeaders();
 		Log.info("XEX Loader: Loading loader info");
-		loaderInfo = new XEXLoaderInfo(data, offsetSecuInfo, list);
+		loaderInfo = new XEXLoaderInfo(data, offsetSecuInfo);
 		loaderInfo.isDevKit = isDevKit;
 		DecryptFileKey();
 		Log.info("XEX Loader: Loading section info");
 		int sectionCount = b.readInt(offsetSecuInfo + 0x180);
 		for(int i=0; i < sectionCount; i++)
 			sections.add(new XEXSection(data, offsetSecuInfo + (i * 24) + 0x184));
-		ReadPEImage(data);
+		if(baseFileFormat.compression != 3)
+			ReadPEImage(data);
 	}
 	
 	public void DecryptFileKey() throws Exception
@@ -133,6 +135,9 @@ public class XEXHeader {
 					break;
 				case 0x3:
 					baseFileFormat = new BaseFileFormat(sec.data);				
+					break;
+				case 0x5:
+					patchDescriptor = new XEXPatchDescriptor(sec.data, 0);
 					break;
 				case 0x80:
 					for(int i = 4; i < sec.data.length; i++)
@@ -314,6 +319,10 @@ public class XEXHeader {
 			case 0:
 				break;
 			case 1:
+				String s = "";
+				for(byte b : sessionKey)
+					s += String.format("%02X ", b);
+				Log.info("XEX Loader: Decrypting using key    = " + s);	
 				compressed = Helper.AESDecrypt(sessionKey, compressed);
 				break;
 			default:
@@ -326,11 +335,15 @@ public class XEXHeader {
 			case 1:
 				for(BaseFileFormat.BasicCompression bc : baseFileFormat.basic)
 				{
-					for(int i = 0; i < bc.dataSize; i++)
+					for(int i = 0; i < bc.dataSize && posIn + i < compressed.length; i++)
 						peImage[i + posOut] = compressed[posIn + i];
 					posOut += bc.dataSize + bc.zeroSize;
 					posIn += bc.dataSize;
 				}
+				break;
+			case 0:
+			case 3:
+				peImage = compressed;
 				break;
 			case 2:
 				BaseFileFormat.NormalCompression nc = baseFileFormat.normal;
@@ -422,7 +435,6 @@ public class XEXHeader {
 		}
 	}
 	
-
 	public void MakeBlock(Program program, String name, String desc, long address, InputStream s, int size, String perm, Structure struc, MessageLog log, TaskMonitor monitor)
 	{
 		try
