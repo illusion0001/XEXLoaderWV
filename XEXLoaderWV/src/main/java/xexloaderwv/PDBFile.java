@@ -6,8 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 
+import org.python.jline.internal.Log;
+
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteArrayProvider;
+import ghidra.program.model.listing.Program;
 import ghidra.util.task.TaskMonitor;
 
 public class PDBFile {
@@ -44,8 +47,9 @@ public class PDBFile {
 	public short symbolStreamIndex;
 	public ArrayList<RootStream> rootStreams = new ArrayList<PDBFile.RootStream>();
 	public ArrayList<SymbolRecord> symbols = new ArrayList<PDBFile.SymbolRecord>();
+	public TPIStream tpi;
 	
-	public PDBFile(String path, TaskMonitor monitor) throws Exception
+	public PDBFile(String path, TaskMonitor monitor, Program program) throws Exception
 	{
 		byte[] data = Files.readAllBytes(Path.of(path));
 		ByteArrayProvider bap = new ByteArrayProvider(data);
@@ -72,6 +76,7 @@ public class PDBFile {
 		ReadRootStreams(os.toByteArray());
 		ReadDBIData(GetStreamData(3, bap));
 		ReadSymbolData(GetStreamData(symbolStreamIndex, bap), monitor);
+		ReadTPIData(GetStreamData(2, bap), program, monitor);
 		bap.close();
 	}
 	
@@ -96,6 +101,11 @@ public class PDBFile {
 		symbolStreamIndex = b.readShort(0x14);
 	}
 	
+	private void ReadTPIData(byte[] data, Program program, TaskMonitor monitor) throws Exception
+	{
+		tpi = new TPIStream(data, monitor);
+	}
+	
 	private void ReadSymbolData(byte[] data, TaskMonitor monitor) throws Exception
 	{
 		ByteArrayProvider bap = new ByteArrayProvider(data);
@@ -106,6 +116,8 @@ public class PDBFile {
 		{
 			while(pos < data.length)
 			{
+				if(monitor.isCancelled())
+					return;
 				monitor.setProgress(pos);
 				SymbolRecord sym = new SymbolRecord(bap, pos);
 				pos += sym.reclen;
@@ -115,7 +127,9 @@ public class PDBFile {
 		catch (Exception e){}
 		monitor.setProgress(0);
 		bap.close();
+	    Log.info(String.format("XEX Loader: Processed %d symbols", symbols.size()));
 	}
+	
 	
 	private void ReadRootStreams(byte[] data) throws Exception
 	{
