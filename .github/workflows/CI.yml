@@ -11,14 +11,13 @@ jobs:
         ghidra: [latest]
     steps:
       - name: Set Ghidra version
-        id: ghidra_version
         run: |
           if [ ${{ matrix.ghidra }} = latest ]; then
             ghidra_version=$(curl -fLsSo /dev/null -w %{url_effective} https://github.com/NationalSecurityAgency/ghidra/releases/latest |
              grep -oP '(?<=https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_).+(?=_build)')
-            echo "::set-output name=full::$ghidra_version"
+            echo "ghidra_version=$ghidra_version" >> $GITHUB_ENV
           else
-            echo "::set-output name=full::${{ matrix.ghidra }}"
+            echo "ghidra_version=${{ matrix.ghidra }}" >> $GITHUB_ENV
           fi
       - name: Checkout
         uses: actions/checkout@v3
@@ -30,7 +29,7 @@ jobs:
       - name: Setup Ghidra
         uses: er28-0652/setup-ghidra@master
         with:
-          version: ${{ steps.ghidra_version.outputs.full }}
+          version: ${{ env.ghidra_version }}
       - name: Build Extension
         working-directory: XEXLoaderWV
         run: gradle
